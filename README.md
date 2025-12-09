@@ -91,7 +91,7 @@ While we are not expecting external contributions at this stage, we are very hap
 If you have an idea for this project and would like to get involved, please reach out to the addresses under [Support](#support).
 
 ## Authors and Acknowledgements
-You can find the [paper](https://arxiv.org/abs/2410.23242v1) associated with this project on arXiv.
+You can find the [paper](https://arxiv.org/abs/2410.23242v1) associated with this project on arXiv. The results from the paper were generated from the version of this codebase at commit `e339118`.
 
 To cite our work, please use the following:
 ```

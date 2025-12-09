@@ -30,15 +30,20 @@ class CameraSystem(VisionSystem):
                         ) -> AAIVisualObservation:
         behavior = list(env.behavior_specs.keys())[0]  # by default should be AnimalAI?team=0
         dec, _ = env.get_steps(behavior)
-        scaled_image_array = np.array(env.get_obs_dict(dec.obs)["camera"] * 255, dtype=np.uint8)
-        assert scaled_image_array.all() < 256
+        camera_obs = env.get_obs_dict(dec.obs)["camera"]
 
-        height, width, _ = scaled_image_array.shape
-        total_width = width * 1 + border_width * 2
-        image = Image.new('RGB', (total_width, height), color='white')
-        # Note: This adds two small white gutters to either side of the image, which were erroneously included when running the paper experiments
-        # They are maintained in this version of the code for consistency
-        image.paste(Image.fromarray(scaled_image_array), box=(border_width+0*(width+border_width), 0)) # Top most border is y=0
+        # Verify observation format (expected: channels-first RGB)
+        assert len(camera_obs.shape) == 3 and camera_obs.shape[0] == 3, (
+            f"Expected camera observation in channels-first format (3, H, W), "
+            f"but got shape {camera_obs.shape}. This may indicate an incompatible "
+            f"AnimalAI version (Expected version 5.x.x)"
+        )
+
+        # Convert from channels-first (C, H, W) to channels-last (H, W, C)
+        camera_obs = np.transpose(camera_obs, (1, 2, 0))
+        scaled_image_array = np.array(camera_obs * 255, dtype=np.uint8)
+        assert scaled_image_array.all() < 256
+        image = Image.fromarray(scaled_image_array)
 
         if save: image.save(save_path)
         if show: image.show()
