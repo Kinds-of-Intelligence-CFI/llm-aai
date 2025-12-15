@@ -296,12 +296,16 @@ class Experiment1(Experiment):
                 session.write_to_file(path=self.options["output_folder_path"])
 
     def _get_llm_session(self, background_prompt: str):
+        # Get thinking_budget from options, defaulting to None if not present
+        thinking_budget = self.options.get("thinking_budget", None)
+
         if self.options["llm_family_switch"] is not None:
             return LLMSessionFactory.create_llm_session(
                 name=self.options["llm_family"],
                 api_key=self._api_key,
                 model=self.options["llm_model"],
                 system_prompt=background_prompt,
+                thinking_budget=thinking_budget,
                 switch_session=LLMSessionFactory.create_llm_session(
                     name=self.options["llm_family_switch"],
                     api_key=self._api_key,
@@ -313,6 +317,7 @@ class Experiment1(Experiment):
             api_key=self._api_key,
             model=self.options["llm_model"],
             system_prompt=background_prompt,
+            thinking_budget=thinking_budget,
         )
 
     def _generate_arena_config_paths(self) -> List[str]:
