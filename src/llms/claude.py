@@ -29,11 +29,13 @@ class AnthropicSession(LLMSession):
                  api_key: str,
                  # https://docs.anthropic.com/claude/docs/models-overview
                  model: SupportedAnthropicModels,
+                 system_prompt: Optional[str] = None,
                  ) -> None:
         super().__init__()
         self._client = anthropic.Anthropic(api_key=api_key)
         self._history: list[MessageParam] = []
         self._model = model
+        self._system_prompt = system_prompt
 
     def prompt(self,
                 prompt_contents: PROMPT_CONTENTS,
@@ -41,16 +43,46 @@ class AnthropicSession(LLMSession):
             ):
         prompt = self._prompt_contents_to_prompt(prompt_contents)
 
+        # Remove cache_control from all previous messages to avoid exceeding the 4 breakpoint limit
+        # Anthropic allows max 4 cache_control markers per request
+        # Since our context only grows, we only need cache_control on the most recent message
+        for message in self._history:
+            if isinstance(message["content"], list):
+                for content_block in message["content"]:
+                    if isinstance(content_block, dict) and "cache_control" in content_block:
+                        del content_block["cache_control"]
+
         self._history.append(MessageParam(role='user', content=prompt))
+
+        # Add cache control to the most recent user message
+        # This creates a cache breakpoint that caches EVERYTHING up to this point
+        # Total breakpoints: system prompt (1) + this message (1) = 2 (well under limit of 4)
+        if len(self._history[-1]["content"]) > 0:
+            self._history[-1]["content"][-1]["cache_control"] = {"type": "ephemeral"}
+
         if resp_prefix is not None:
             self._history.append(MessageParam(role='assistant', content=resp_prefix))
-        message = self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            temperature=0.0,
-            messages=self._history,
-            stop_sequences=AnthropicSession.stop_sequences,
-        )
+
+        # Build the API call parameters
+        api_params = {
+            "model": self._model,
+            "max_tokens": 1024,
+            "temperature": 0.0,
+            "messages": self._history,
+            "stop_sequences": AnthropicSession.stop_sequences,
+        }
+
+        # Add system prompt with cache control if provided
+        if self._system_prompt:
+            api_params["system"] = [
+                {
+                    "type": "text",
+                    "text": self._system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+
+        message = self._client.messages.create(**api_params)
         response_content = message.content
 
         self.input_costs = np.append(self.input_costs, message.usage.input_tokens)
@@ -134,13 +166,15 @@ class AnthropicAPI(LLMAPI):
     def __init__(self,
                  api_key: str,
                  # https://docs.anthropic.com/claude/docs/models-overview
-                 model: SupportedAnthropicModels
+                 model: SupportedAnthropicModels,
+                 system_prompt: Optional[str] = None
                  ) -> None:
         self._api_key = api_key
         self._model = model
+        self._system_prompt = system_prompt
 
     def start_session(self):
-        return AnthropicSession(self._api_key, self._model)
+        return AnthropicSession(self._api_key, self._model, self._system_prompt)
 
 
 if __name__ == "__main__":

@@ -92,7 +92,6 @@ class Experiment1(Experiment):
         self._episode_end_reasons = np.array([])
 
     def run(self) -> None:
-        session = self._get_llm_session()
         history_index = 0
         vision_system = CameraSystem()
 
@@ -105,7 +104,8 @@ class Experiment1(Experiment):
             misc=MISC[self.options["misc"]],
         )
 
-        message: PROMPT_CONTENTS = self._create_initial_message(background_prompt)
+        session = self._get_llm_session(background_prompt)
+        message: PROMPT_CONTENTS = self._create_initial_message()
         episode_end_reason: EpisodeEndReasons = "REASON_UNKNOWN"
 
         for loop_index in range(self.options["num_arena_loops"]):
@@ -128,8 +128,8 @@ class Experiment1(Experiment):
                     print(f"Starting to solve: {config_path}")
 
                 if not self.options["learn_across_arenas"]:
-                    message = self._create_initial_message(background_prompt)
-                    session = self._get_llm_session()
+                    message = self._create_initial_message()
+                    session = self._get_llm_session(background_prompt)
                     history_index = 0
                 env = AnimalAIEnvironment(
                     file_name=user_settings.ENV_PATH,
@@ -295,12 +295,13 @@ class Experiment1(Experiment):
             if not self.options["learn_across_arenas"]:
                 session.write_to_file(path=self.options["output_folder_path"])
 
-    def _get_llm_session(self):
+    def _get_llm_session(self, background_prompt: str):
         if self.options["llm_family_switch"] is not None:
             return LLMSessionFactory.create_llm_session(
                 name=self.options["llm_family"],
                 api_key=self._api_key,
                 model=self.options["llm_model"],
+                system_prompt=background_prompt,
                 switch_session=LLMSessionFactory.create_llm_session(
                     name=self.options["llm_family_switch"],
                     api_key=self._api_key,
@@ -311,6 +312,7 @@ class Experiment1(Experiment):
             name=self.options["llm_family"],
             api_key=self._api_key,
             model=self.options["llm_model"],
+            system_prompt=background_prompt,
         )
 
     def _generate_arena_config_paths(self) -> List[str]:
@@ -369,14 +371,12 @@ class Experiment1(Experiment):
                     return message, True, total_reward
         return message, False, total_reward
 
-    def _create_initial_message(self, background_prompt: str) -> PROMPT_CONTENTS:
+    def _create_initial_message(self) -> PROMPT_CONTENTS:
         n_shot_path = self.options["n_shot_examples_path"]
         """Creates the initial message that is passed to the LLM, prior to any interaction with the LLM.
 
         Note:
-        - This message is composed of a background prompt as well as the n-shot examples to pass to the LLM.
-        - The n-shot examples must be encoded as .pkl files of list[LLMMessageParam] (see llm.py and LLMSession).
-        - For now, these n-shot examples must be produced and saved by running Experiment1.run with a HumanSession.
+        - Currently only used for n-shot examples
         """
         # TODO: add new line between initial_message and send-off
         def _add_single_example_run_to_message(message: PROMPT_CONTENTS,
@@ -405,9 +405,7 @@ class Experiment1(Experiment):
                         ]
             return message
 
-        initial_message = [
-            (PromptElement.Text, background_prompt)
-        ]
+        initial_message = []
         if n_shot_path is None:
             return initial_message
         else:
