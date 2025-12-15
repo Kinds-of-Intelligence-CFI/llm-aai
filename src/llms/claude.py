@@ -4,7 +4,7 @@ from typing import List, Literal, Optional, Union
 import anthropic
 import numpy as np
 from anthropic.types import MessageParam, TextBlockParam
-from anthropic.types.image_block_param import ImageBlockParam, Source
+from anthropic.types.image_block_param import ImageBlockParam
 import base64
 import httpx
 import pickle
@@ -49,7 +49,7 @@ class AnthropicSession(LLMSession):
             max_tokens=1024,
             temperature=0.0,
             messages=self._history,
-            stop_sequences=AnthropicSession.stop_sequences
+            stop_sequences=AnthropicSession.stop_sequences,
         )
         response_content = message.content
 
@@ -109,11 +109,11 @@ class AnthropicSession(LLMSession):
         return [
             ImageBlockParam(
                 type="image",
-                source=Source(
-                    type="base64",
-                    media_type="image/jpeg",
-                    data=contents
-                )
+                source={
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": contents
+                }
             ) if type.value == PromptElement.Image.value else TextBlockParam(
                 type="text",
                 text=contents
