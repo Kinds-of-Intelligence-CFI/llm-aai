@@ -1,4 +1,6 @@
 import pickle
+import shutil
+import time
 from os import listdir
 from os.path import isfile, join
 from typing import Dict, List, Literal, Union
@@ -131,6 +133,7 @@ class Experiment1(Experiment):
                     message = self._create_initial_message()
                     session = self._get_llm_session(background_prompt)
                     history_index = 0
+                arena_start_time = time.time()
                 env = AnimalAIEnvironment(
                     file_name=user_settings.ENV_PATH,
                     arenas_configurations=config_path,
@@ -264,6 +267,23 @@ class Experiment1(Experiment):
                     history_index = len(session.history)
 
                     session.save_cost_arrays(cost_folder_path=config_output_path)
+
+                    # Copy the AAI observation CSV to the arena output folder
+                    obs_logs_dir = join(os.path.dirname(user_settings.ENV_PATH), "ObservationLogs")
+                    if os.path.isdir(obs_logs_dir):
+                        csv_files = [
+                            f for f in os.listdir(obs_logs_dir)
+                            if f.startswith("Observations_") and f.endswith(".csv")
+                            and os.path.getmtime(join(obs_logs_dir, f)) >= arena_start_time
+                        ]
+                        if csv_files:
+                            latest_csv = max(csv_files, key=lambda f: os.path.getmtime(join(obs_logs_dir, f)))
+                            shutil.copy2(join(obs_logs_dir, latest_csv), join(config_output_path, latest_csv))
+                        elif self.options["verbose"]:
+                            print(f"No AAI observation CSV found in {obs_logs_dir} for this arena run")
+                    elif self.options["verbose"]:
+                        print(f"AAI ObservationLogs directory not found: {obs_logs_dir}")
+
                     if self.options["verbose"]:
                         print(f"Reward garnered for {config_path}: {total_reward}")
 
