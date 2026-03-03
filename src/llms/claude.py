@@ -9,6 +9,7 @@ from anthropic.types.image_block_param import ImageBlockParam
 import base64
 import httpx
 import pickle
+import warnings
 
 import user_settings
 from src.llms.llm import BASE64_STRING, LLMAPI, LLMSession, PromptElement, PROMPT_CONTENTS
@@ -117,21 +118,32 @@ class AnthropicSession(LLMSession):
         self.cache_read_costs = np.append(self.cache_read_costs, cache_read)
 
         # Extract thinking tokens and content
-        thinking_tokens = 0
-        thinking_summary = None
+        thinking_parts = []
         text_response = None
 
         for block in response_content:
             if block.type == "thinking":
-                thinking_tokens += len(block.thinking.split())  # Approximate token count
-                thinking_summary = block.thinking
+                thinking_parts.append(block.thinking)
             elif block.type == "text":
                 text_response = block.text
 
+        thinking_summary = '\n'.join(thinking_parts) if thinking_parts else None
+
+        # Use thinking token count from usage if available, otherwise approximate with word count
+        thinking_tokens = getattr(message.usage, 'thinking_input_tokens',
+                                  sum(len(t.split()) for t in thinking_parts))
         self.thinking_costs = np.append(self.thinking_costs, thinking_tokens)
 
         # Append response to history (include both thinking and text if present)
         if resp_prefix is not None:
+            if thinking_summary:
+                warnings.warn(
+                    "resp_prefix is used alongside thinking blocks. Thinking content will be "
+                    "serialised as plain text and won't be passed back to the API as proper "
+                    "thinking blocks on subsequent turns.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             self._history.pop()
             response_text = resp_prefix
             if thinking_summary:
@@ -265,11 +277,23 @@ class AnthropicSession(LLMSession):
     def get_assistant_commands_from_pkl_history(path_to_pkl: str) -> List[str]:
         with open(path_to_pkl, "rb") as file:
             history: List[MessageParam] = pickle.load(file)
-        return [
-                response["content"][0].text
-                for response in history
-                if response["role"] == "assistant"
-            ]
+
+        responses = []
+        for response in history:
+            if response["role"] == "assistant":
+                # Extract text from content blocks, skipping thinking blocks
+                text_parts = []
+                for block in response["content"]:
+                    if hasattr(block, 'text'):
+                        text_parts.append(block.text)
+                    elif hasattr(block, 'type') and block.type == 'text' and hasattr(block, 'text'):
+                        text_parts.append(block.text)
+
+                # Join all text parts if there are multiple
+                if text_parts:
+                    responses.append('\n'.join(text_parts))
+
+        return responses
 
 class AnthropicAPI(LLMAPI):
     def __init__(self,

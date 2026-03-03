@@ -20,9 +20,15 @@ class RecordingSession(LLMSession):
     def __init__(self,
                  api_key: str,
                  model: str,
-                 switch_session: Optional[LLMSession] = None
+                 switch_session: Optional[LLMSession] = None,
+                 system_prompt: Optional[str] = None,
+                 thinking_budget: Optional[int] = None
                  ) -> None:
         print(f"Human LLM ignoring key and model {api_key}, {model}")
+        if system_prompt is not None:
+            print(f"RecordingSession ignoring system_prompt")
+        if thinking_budget is not None:
+            print(f"RecordingSession ignoring thinking_budget")
         print(f"*** ASSUMING {RESOLUTION}*{RESOLUTION} IMAGES FOR TOKENISATION ***")
         self._history: list[LLMMessageParam] = []
         self.input_costs = np.array([])
