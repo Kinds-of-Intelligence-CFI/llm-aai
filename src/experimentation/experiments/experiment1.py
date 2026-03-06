@@ -269,7 +269,12 @@ class Experiment1(Experiment):
                     session.save_cost_arrays(cost_folder_path=config_output_path)
 
                     # Copy the AAI observation CSV to the arena output folder
+                    # On Mac, ENV_PATH points to the .app bundle (a directory), so ObservationLogs
+                    # is inside it. On Linux/Windows, ENV_PATH is an executable file, so
+                    # ObservationLogs is a sibling of the executable's parent directory.
                     obs_logs_dir = join(os.path.dirname(user_settings.ENV_PATH), "ObservationLogs")
+                    if not os.path.isdir(obs_logs_dir):
+                        obs_logs_dir = join(user_settings.ENV_PATH, "ObservationLogs")
                     if os.path.isdir(obs_logs_dir):
                         csv_files = [
                             f for f in os.listdir(obs_logs_dir)
